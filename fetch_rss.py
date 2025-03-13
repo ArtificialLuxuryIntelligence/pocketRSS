@@ -8,8 +8,8 @@ POCKET_ACCESS_TOKEN = os.getenv("POCKET_ACCESS_TOKEN")
 
 # List of RSS feeds
 RSS_FEEDS = [
-    "https://example.com/rss",
-    "https://another-site.com/feed",
+    "https://www.theatlantic.com/feed/all/",
+    "http://plato.stanford.edu/rss/sep.xml",
 ]
 
 # Fetch new articles
