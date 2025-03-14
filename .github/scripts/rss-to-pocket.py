@@ -103,12 +103,12 @@ def process_articles():
     if not validate_credentials():
         return
 
-    # new_articles = get_articles()
-    # if new_articles:
-    #     logger.info(f"Found {len(new_articles)} new articles.")
-    #     save_to_pocket_batch(new_articles)
-    # else:
-    #     logger.info("No new articles found.")
+    new_articles = get_articles()
+    if new_articles:
+        logger.info(f"Found {len(new_articles)} new articles.")
+        save_to_pocket_batch(new_articles)
+    else:
+        logger.info("No new articles found.")
 
     articles = get_pocket_articles()
     if not articles:
