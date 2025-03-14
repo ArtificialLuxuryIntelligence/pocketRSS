@@ -2,19 +2,18 @@ import os
 import feedparser
 import requests
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # === CONFIGURATION ===
 POCKET_CONSUMER_KEY = os.getenv("POCKET_CONSUMER_KEY")
 POCKET_ACCESS_TOKEN = os.getenv("POCKET_ACCESS_TOKEN")
 POCKET_API_URL = "https://getpocket.com/v3"
 BATCH_SIZE = 100
-# 2 weeks = 20160 minutes
-ARTICLE_RETENTION_MINUTES = 10
 
+# === NOTE: THIS IS GETTING CALLED EVERY HOUR (there should be decent amount of overlay, pocket doesn't add dupes) ===
 RSS_FEEDS = [
-    "https://plato.stanford.edu/rss/sep.xml",
-    "https://www.theguardian.com/world/rss",
+    {"url": "https://plato.stanford.edu/rss/sep.xml", "num_articles": 5},
+    {"url": "https://www.theguardian.com/world/rss", "num_articles": 10},
 ]
 
 # === LOGGING SETUP ===
@@ -32,10 +31,10 @@ def validate_credentials() -> bool:
 def get_articles() -> list:
     """Get articles from all the RSS feeds."""
     articles = []
-    for feed_url in RSS_FEEDS:
-        feed = feedparser.parse(feed_url)
-        for entry in feed.entries[:5]:  # Get latest 5 articles from each feed
-            articles.append({"url": entry.link, "tag": feed.feed.title.lower().replace(" ", "-")})
+    for feed in RSS_FEEDS:
+        feed_data = feedparser.parse(feed["url"])
+        for entry in feed_data.entries[:feed["num_articles"]]:
+            articles.append({"url": entry.link, "tag": feed_data.feed.title.lower().replace(" ", "-")})
     return articles
 
 # === SAVE ARTICLES TO POCKET ===
@@ -57,6 +56,36 @@ def get_pocket_articles():
     response = make_pocket_request("get", {"count": 2000})
     return response.get("list", {}) if response else {}
 
+# === DELETE EXCESS ARTICLES ===
+def delete_excess_articles():
+    """Ensure only the latest articles are kept per feed."""
+    articles = get_pocket_articles()
+    if not articles:
+        logger.info("No articles found in Pocket or failed to fetch articles.")
+        return
+    
+    articles_by_feed = {}
+    for article_id, article in articles.items():
+        tags = article.get("tags", {})
+        for tag in tags:
+            feed_tag = tag["tag"]
+            if feed_tag not in articles_by_feed:
+                articles_by_feed[feed_tag] = []
+            articles_by_feed[feed_tag].append((article_id, int(article.get("time_added", "0"))))
+    
+    articles_to_delete = []
+    for feed in RSS_FEEDS:
+        feed_tag = feed["url"].split("/")[-2]  # Extract a unique identifier from URL
+        if feed_tag in articles_by_feed:
+            sorted_articles = sorted(articles_by_feed[feed_tag], key=lambda x: x[1], reverse=True)
+            excess_articles = sorted_articles[feed["num_articles"]:]
+            articles_to_delete.extend([article[0] for article in excess_articles])
+    
+    if articles_to_delete:
+        delete_articles_in_batch(articles_to_delete)
+    else:
+        logger.info("No excess articles to delete.")
+
 # === DELETE ARTICLES FROM POCKET ===
 def delete_articles_in_batch(article_ids: list):
     """Delete articles in batch from Pocket."""
@@ -71,15 +100,6 @@ def delete_articles_in_batch(article_ids: list):
         
         if response:
             logger.info(f"Successfully deleted {len(batch)} articles.")
-
-# === CHECK ARTICLE AGE ===
-def is_older_than_retention_period(time_added: str) -> bool:
-    """Check if the article is older than the retention period."""
-    try:
-        article_added_date = datetime.utcfromtimestamp(int(time_added))
-        return article_added_date < datetime.utcnow() - timedelta(minutes=ARTICLE_RETENTION_MINUTES)
-    except ValueError:
-        return False
 
 # === MAKE API REQUESTS ===
 def make_pocket_request(endpoint: str, params: dict):
@@ -97,32 +117,13 @@ def make_pocket_request(endpoint: str, params: dict):
         logger.error(f"Pocket API request failed: {e}")
         return None
 
-# === MAIN PROCESS ===
-def process_articles():
-    """Fetch new articles, save them to Pocket, and delete old articles."""
-    if not validate_credentials():
-        return
-
-    new_articles = get_articles()
-    if new_articles:
-        logger.info(f"Found {len(new_articles)} new articles.")
-        save_to_pocket_batch(new_articles)
-    else:
-        logger.info("No new articles found.")
-
-    articles = get_pocket_articles()
-    if not articles:
-        logger.info("No articles found in Pocket or failed to fetch articles.")
-        return
-
-    old_articles = [article_id for article_id, article in articles.items()
-                    if is_older_than_retention_period(article.get("time_added", "0"))]
-    
-    if old_articles:
-        delete_articles_in_batch(old_articles)
-    else:
-        logger.info("No articles older than retention period found.")
-
 # === EXECUTION ===
 if __name__ == "__main__":
-    process_articles()
+    if validate_credentials():
+        new_articles = get_articles()
+        if new_articles:
+            logger.info(f"Found {len(new_articles)} new articles.")
+            save_to_pocket_batch(new_articles)
+        else:
+            logger.info("No new articles found.")
+        delete_excess_articles()
