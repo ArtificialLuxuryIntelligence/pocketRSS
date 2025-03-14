@@ -14,7 +14,6 @@ BATCH_SIZE = 100
 RSS_FEEDS = [
     {"url": "https://plato.stanford.edu/rss/sep.xml", "num_articles": 5},
     {"url": "https://www.theguardian.com/world/rss", "num_articles": 10},
-    {"url": "https://feeds.skynews.com/feeds/rss/world.xml", "num_articles": 1}
 ]
 
 # === LOGGING SETUP ===
@@ -68,8 +67,8 @@ def delete_excess_articles():
     articles_by_feed = {}
     for article_id, article in articles.items():
         tags = article.get("tags", {})
-        for tag in tags:
-            feed_tag = tag["tag"]
+        for tag_data in tags.values():
+            feed_tag = tag_data["tag"]
             if feed_tag not in articles_by_feed:
                 articles_by_feed[feed_tag] = []
             articles_by_feed[feed_tag].append((article_id, int(article.get("time_added", "0"))))
