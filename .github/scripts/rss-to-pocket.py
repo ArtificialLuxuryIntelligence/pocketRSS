@@ -10,10 +10,11 @@ POCKET_ACCESS_TOKEN = os.getenv("POCKET_ACCESS_TOKEN")
 POCKET_API_URL = "https://getpocket.com/v3"
 BATCH_SIZE = 100
 # 2 weeks = 20160 minutes
-ARTICLE_RETENTION_MINUTES = 2
+ARTICLE_RETENTION_MINUTES = 10
+
 RSS_FEEDS = [
-    "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml",
-    "https://www.theguardian.com/uk/technology/rss",
+    "https://plato.stanford.edu/rss/sep.xml",
+    "https://www.theguardian.com/world/rss",
 ]
 
 # === LOGGING SETUP ===
@@ -34,21 +35,21 @@ def get_articles() -> list:
     for feed_url in RSS_FEEDS:
         feed = feedparser.parse(feed_url)
         for entry in feed.entries[:5]:  # Get latest 5 articles from each feed
-            articles.append(entry.link)
+            articles.append({"url": entry.link, "tag": feed.feed.title.lower().replace(" ", "-")})
     return articles
 
 # === SAVE ARTICLES TO POCKET ===
-def save_to_pocket_batch(urls: list):
-    """Save a batch of articles to Pocket."""
-    if not urls:
+def save_to_pocket_batch(articles: list):
+    """Save a batch of articles to Pocket with tags."""
+    if not articles:
         logger.info("No articles to save.")
         return
 
-    actions = [{"action": "add", "url": url} for url in urls]
+    actions = [{"action": "add", "url": article["url"], "tags": article["tag"]} for article in articles]
     response = make_pocket_request("send", {"actions": actions})
     
     if response:
-        logger.info(f"Successfully saved {len(urls)} articles to Pocket.")
+        logger.info(f"Successfully saved {len(articles)} articles to Pocket.")
 
 # === FETCH POCKET ARTICLES ===
 def get_pocket_articles():
