@@ -10,11 +10,14 @@ POCKET_ACCESS_TOKEN = os.getenv("POCKET_ACCESS_TOKEN")
 POCKET_API_URL = "https://getpocket.com/v3"
 BATCH_SIZE = 100
 
-# === NOTE: THIS IS GETTING CALLED EVERY HOUR (there should be decent amount of overlay, pocket doesn't add dupes) ===
 RSS_FEEDS = [
     {"url": "https://plato.stanford.edu/rss/sep.xml", "num_articles": 5},
     {"url": "https://www.theguardian.com/world/rss", "num_articles": 10},
     {"url": "https://feeds.skynews.com/feeds/rss/world.xml", "num_articles": 1}
+
+    # economist
+    # comic
+
 
 ]
 

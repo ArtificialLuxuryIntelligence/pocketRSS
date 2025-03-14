@@ -2,7 +2,9 @@ name: Fetch RSS and Save to Pocket
 
 on:
   schedule:
-    - cron: '0 * * * *' # Runs every hour
+    - cron: '0 */6 * * *' # Runs every 6 hours
+    # - cron: '0 * * * *' # Runs every hour
+
   workflow_dispatch: # Allows manual runs
 
 jobs:
