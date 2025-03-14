@@ -14,6 +14,8 @@ BATCH_SIZE = 100
 RSS_FEEDS = [
     {"url": "https://plato.stanford.edu/rss/sep.xml", "num_articles": 5},
     {"url": "https://www.theguardian.com/world/rss", "num_articles": 10},
+    {"url": "https://feeds.skynews.com/feeds/rss/world.xml", "num_articles": 1}
+
 ]
 
 # === LOGGING SETUP ===
