@@ -14,11 +14,6 @@ RSS_FEEDS = [
     {"url": "https://plato.stanford.edu/rss/sep.xml", "num_articles": 5},
     {"url": "https://www.theguardian.com/world/rss", "num_articles": 10},
     {"url": "https://feeds.skynews.com/feeds/rss/world.xml", "num_articles": 1}
-
-    # economist
-    # comic
-
-
 ]
 
 # === LOGGING SETUP ===
@@ -39,7 +34,9 @@ def get_articles() -> list:
     for feed in RSS_FEEDS:
         feed_data = feedparser.parse(feed["url"])
         for entry in feed_data.entries[:feed["num_articles"]]:
-            articles.append({"url": entry.link, "tag": feed_data.feed.title.lower().replace(" ", "-")})
+            # Use the full RSS URL as the tag
+            tag = feed["url"].lower().replace("https://", "").replace("www.", "").replace("/", "-")
+            articles.append({"url": entry.link, "tag": tag})
     return articles
 
 # === SAVE ARTICLES TO POCKET ===
@@ -80,7 +77,7 @@ def delete_excess_articles():
     
     articles_to_delete = []
     for feed in RSS_FEEDS:
-        feed_tag = feed["url"].split("/")[-2]  # Extract a unique identifier from URL
+        feed_tag = feed["url"].lower().replace("https://", "").replace("www.", "").replace("/", "-")
         if feed_tag in articles_by_feed:
             sorted_articles = sorted(articles_by_feed[feed_tag], key=lambda x: x[1], reverse=True)
             excess_articles = sorted_articles[feed["num_articles"]:]
