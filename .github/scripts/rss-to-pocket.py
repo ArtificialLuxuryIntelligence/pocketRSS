@@ -2,7 +2,8 @@ import os
 import feedparser
 import requests
 import logging
-import re
+import random
+import string
 from datetime import datetime
 
 # === CONFIGURATION ===
@@ -23,8 +24,9 @@ logger = logging.getLogger(__name__)
 
 # === UTILITY FUNCTIONS ===
 def generate_tag(url: str) -> str:
-    """Generate a consistent tag from an RSS feed URL."""
-    return re.sub(r"https?://(www\.)?", "", url).replace("/", "-")
+    """Generate a consistent random tag of 8 characters from an RSS feed URL."""
+    random.seed(url)  # Optionally use the URL to seed the RNG for consistency
+    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
 
 # === VALIDATION ===
 def validate_credentials() -> bool:
@@ -138,10 +140,11 @@ def make_pocket_request(endpoint: str, params: dict) -> dict:
 # === EXECUTION ===
 if __name__ == "__main__":
     if validate_credentials():
-        enforce_article_limits()  # 🔄 DELETE EXCESS BEFORE ADDING NEW ARTICLES
         new_articles = get_articles()
         if new_articles:
             logger.info(f"Found {len(new_articles)} new articles.")
             save_to_pocket_batch(new_articles)
+            enforce_article_limits()
+
         else:
             logger.info("No new articles found.")
