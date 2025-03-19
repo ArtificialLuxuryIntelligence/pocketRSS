@@ -18,7 +18,7 @@ RSS_FEEDS = [
 ]
 
 # === LOGGING SETUP ===
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # === UTILITY FUNCTIONS ===
@@ -44,8 +44,11 @@ def get_articles() -> list[dict[str, str]]:
             continue
         
         tag = generate_tag(feed["url"])
+        logger.debug(f"Fetched {len(feed_data.entries)} entries from {feed['url']}")
         for entry in feed_data.entries[:feed["num_articles"]]:
-            articles.append({"url": entry.link, "tag": tag})
+            article = {"url": entry.link, "tag": tag}
+            logger.info(f"Found article: {article['url']} with tag {article['tag']}")
+            articles.append(article)
     return articles
 
 # === FETCH POCKET ARTICLES ===
@@ -68,12 +71,16 @@ def enforce_article_limits():
                 articles_by_feed[feed_tag] = []
             articles_by_feed[feed_tag].append((article_id, int(article.get("time_added", "0"))))
     
+    logger.debug(f"Articles by feed before enforcement: {articles_by_feed}")
+    
     articles_to_delete = []
     for feed in RSS_FEEDS:
         feed_tag = generate_tag(feed["url"])
         if feed_tag in articles_by_feed:
             sorted_articles = sorted(articles_by_feed[feed_tag], key=lambda x: x[1], reverse=True)
             excess_articles = sorted_articles[feed["num_articles"]:]
+            for article in excess_articles:
+                logger.info(f"Marking for deletion: {article[0]} from {feed_tag}")
             articles_to_delete.extend([article[0] for article in excess_articles])
     
     if articles_to_delete:
@@ -109,6 +116,8 @@ def save_to_pocket_batch(articles: list[dict[str, str]]):
     
     if response:
         logger.info(f"Successfully saved {len(articles)} articles to Pocket.")
+        for article in articles:
+            logger.info(f"Saved article: {article['url']} with tag {article['tag']}")
 
 # === MAKE API REQUESTS ===
 def make_pocket_request(endpoint: str, params: dict) -> dict:
@@ -129,10 +138,10 @@ def make_pocket_request(endpoint: str, params: dict) -> dict:
 # === EXECUTION ===
 if __name__ == "__main__":
     if validate_credentials():
+        enforce_article_limits()  # 🔄 DELETE EXCESS BEFORE ADDING NEW ARTICLES
         new_articles = get_articles()
         if new_articles:
             logger.info(f"Found {len(new_articles)} new articles.")
             save_to_pocket_batch(new_articles)
         else:
             logger.info("No new articles found.")
-        enforce_article_limits()  # 🔄 DELETE EXCESS AFTER ADDING NEW ARTICLES
