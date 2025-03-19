@@ -2,6 +2,7 @@ import os
 import feedparser
 import requests
 import logging
+import re
 from datetime import datetime
 
 # === CONFIGURATION ===
@@ -20,6 +21,11 @@ RSS_FEEDS = [
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# === UTILITY FUNCTIONS ===
+def generate_tag(url: str) -> str:
+    """Generate a consistent tag from an RSS feed URL."""
+    return re.sub(r"https?://(www\.)?", "", url).replace("/", "-")
+
 # === VALIDATION ===
 def validate_credentials() -> bool:
     if not POCKET_CONSUMER_KEY or not POCKET_ACCESS_TOKEN:
@@ -28,43 +34,30 @@ def validate_credentials() -> bool:
     return True
 
 # === FETCH ARTICLES ===
-def get_articles() -> list:
+def get_articles() -> list[dict[str, str]]:
     """Get articles from all the RSS feeds."""
     articles = []
     for feed in RSS_FEEDS:
         feed_data = feedparser.parse(feed["url"])
+        if not feed_data.entries:
+            logger.warning(f"Failed to fetch or parse feed: {feed['url']}")
+            continue
+        
+        tag = generate_tag(feed["url"])
         for entry in feed_data.entries[:feed["num_articles"]]:
-            # Use the full RSS URL as the tag
-            tag = feed["url"].lower().replace("https://", "").replace("www.", "").replace("/", "-")
             articles.append({"url": entry.link, "tag": tag})
     return articles
 
-# === SAVE ARTICLES TO POCKET ===
-def save_to_pocket_batch(articles: list):
-    """Save a batch of articles to Pocket with tags."""
-    if not articles:
-        logger.info("No articles to save.")
-        return
-
-    actions = [{"action": "add", "url": article["url"], "tags": article["tag"]} for article in articles]
-    response = make_pocket_request("send", {"actions": actions})
-    
-    if response:
-        logger.info(f"Successfully saved {len(articles)} articles to Pocket.")
-
 # === FETCH POCKET ARTICLES ===
-def get_pocket_articles():
+def get_pocket_articles() -> dict:
     """Get all articles from Pocket."""
     response = make_pocket_request("get", {"count": 2000})
     return response.get("list", {}) if response else {}
 
 # === DELETE EXCESS ARTICLES ===
-def delete_excess_articles():
+def enforce_article_limits():
     """Ensure only the latest articles are kept per feed."""
     articles = get_pocket_articles()
-    if not articles:
-        logger.info("No articles found in Pocket or failed to fetch articles.")
-        return
     
     articles_by_feed = {}
     for article_id, article in articles.items():
@@ -77,19 +70,20 @@ def delete_excess_articles():
     
     articles_to_delete = []
     for feed in RSS_FEEDS:
-        feed_tag = feed["url"].lower().replace("https://", "").replace("www.", "").replace("/", "-")
+        feed_tag = generate_tag(feed["url"])
         if feed_tag in articles_by_feed:
             sorted_articles = sorted(articles_by_feed[feed_tag], key=lambda x: x[1], reverse=True)
             excess_articles = sorted_articles[feed["num_articles"]:]
             articles_to_delete.extend([article[0] for article in excess_articles])
     
     if articles_to_delete:
+        logger.info(f"Deleting {len(articles_to_delete)} excess articles.")
         delete_articles_in_batch(articles_to_delete)
     else:
         logger.info("No excess articles to delete.")
 
 # === DELETE ARTICLES FROM POCKET ===
-def delete_articles_in_batch(article_ids: list):
+def delete_articles_in_batch(article_ids: list[str]):
     """Delete articles in batch from Pocket."""
     if not article_ids:
         logger.info("No articles to delete.")
@@ -103,8 +97,21 @@ def delete_articles_in_batch(article_ids: list):
         if response:
             logger.info(f"Successfully deleted {len(batch)} articles.")
 
+# === SAVE ARTICLES TO POCKET ===
+def save_to_pocket_batch(articles: list[dict[str, str]]):
+    """Save a batch of articles to Pocket with tags."""
+    if not articles:
+        logger.info("No articles to save.")
+        return
+    
+    actions = [{"action": "add", "url": article["url"], "tags": article["tag"]} for article in articles]
+    response = make_pocket_request("send", {"actions": actions})
+    
+    if response:
+        logger.info(f"Successfully saved {len(articles)} articles to Pocket.")
+
 # === MAKE API REQUESTS ===
-def make_pocket_request(endpoint: str, params: dict):
+def make_pocket_request(endpoint: str, params: dict) -> dict:
     """Helper function to make requests to the Pocket API."""
     url = f"{POCKET_API_URL}/{endpoint}"
     params.update({
@@ -117,7 +124,7 @@ def make_pocket_request(endpoint: str, params: dict):
         return response.json()
     except requests.exceptions.RequestException as e:
         logger.error(f"Pocket API request failed: {e}")
-        return None
+        return {}
 
 # === EXECUTION ===
 if __name__ == "__main__":
@@ -128,4 +135,4 @@ if __name__ == "__main__":
             save_to_pocket_batch(new_articles)
         else:
             logger.info("No new articles found.")
-        delete_excess_articles()
+        enforce_article_limits()  # 🔄 DELETE EXCESS AFTER ADDING NEW ARTICLES
